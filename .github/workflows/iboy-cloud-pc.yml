@@ -1,0 +1,90 @@
+name: IBOY CLOUD PC - Windows Automation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'assets/**'
+      - 'config/**'
+      - 'scripts/**'
+      - '.github/workflows/iboy-cloud-pc.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  windows-automation:
+    name: Configure temporary Windows runner
+    runs-on: windows-2025
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate project files
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $required = @(
+            'assets/wallpaper.jpg',
+            'config/desktop.json',
+            'scripts/Install-Desktop.ps1',
+            'scripts/Apply-Desktop.ps1',
+            'scripts/Setup-Tailscale.ps1',
+            'scripts/Setup-Remote.ps1'
+          )
+          foreach ($file in $required) {
+            if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
+              throw "Required file missing: $file"
+            }
+          }
+          Get-Content 'config/desktop.json' -Raw | ConvertFrom-Json | Out-Null
+          Write-Host 'Project structure and JSON configuration are valid.'
+
+      - name: Install desktop assets
+        shell: pwsh
+        run: ./scripts/Install-Desktop.ps1
+
+      - name: Apply desktop preferences
+        shell: pwsh
+        run: ./scripts/Apply-Desktop.ps1
+
+      - name: Run remote-access safety diagnostics
+        shell: pwsh
+        run: |
+          ./scripts/Setup-Tailscale.ps1
+          ./scripts/Setup-Remote.ps1
+
+      - name: Create report
+        if: always()
+        shell: pwsh
+        run: |
+          $reportDir = Join-Path $env:GITHUB_WORKSPACE 'output'
+          New-Item -ItemType Directory -Path $reportDir -Force | Out-Null
+          $report = [ordered]@{
+            project = 'IBOY CLOUD PC'
+            creator = 'Bayu'
+            runner = $env:ImageOS
+            runnerImage = $env:ImageVersion
+            computerName = $env:COMPUTERNAME
+            user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+            generatedAtUtc = (Get-Date).ToUniversalTime().ToString('o')
+            note = 'Temporary GitHub-hosted CI runner. Not an interactive RDP desktop.'
+          }
+          $report | ConvertTo-Json -Depth 5 |
+            Set-Content -LiteralPath (Join-Path $reportDir 'report.json') -Encoding UTF8
+          Get-ComputerInfo |
+            Select-Object WindowsProductName, WindowsVersion, OsBuildNumber, CsNumberOfLogicalProcessors, CsTotalPhysicalMemory |
+            Format-List | Out-String |
+            Set-Content -LiteralPath (Join-Path $reportDir 'windows-info.txt') -Encoding UTF8
+
+      - name: Upload diagnostic artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iboy-cloud-pc-report
+          path: output/
+          if-no-files-found: warn
+          retention-days: 7

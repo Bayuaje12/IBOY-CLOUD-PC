@@ -1,0 +1,12 @@
+{
+  "projectName": "IBOY CLOUD PC",
+  "creator": "Bayu",
+  "wallpaperSource": "assets/wallpaper.jpg",
+  "wallpaperTarget": "IBOY-CLOUD-PC/wallpaper.jpg",
+  "theme": {
+    "appsUseDarkMode": true,
+    "systemUsesDarkMode": true
+  },
+  "applyAtLogon": false,
+  "notes": "GitHub-hosted runners are temporary. Logon persistence is intentionally disabled."
+}
